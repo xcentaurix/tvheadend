@@ -54,6 +54,18 @@ typedef struct linuxdvb_lnb         linuxdvb_lnb_t;
 typedef struct linuxdvb_network     linuxdvb_network_t;
 typedef struct linuxdvb_en50494     linuxdvb_en50494_t;
 
+/*
+ * FBC (Full Band Capture) topology, as discovered from
+ * /proc/stb/frontend/<n>/... (see linuxdvb_fbc.c). One entry per
+ * possible frontend slot index (0-31, matching linuxdvb_adapter_add()'s
+ * frontend-loop range).
+ */
+typedef struct {
+  int set_id;   /* -1 = not an FBC slot */
+  int slot_id;  /* position within the set, in discovery order */
+  int is_root;  /* bool: can this slot own a physical LNB input? */
+} linuxdvb_fbc_slot_t;
+
 typedef LIST_HEAD(,linuxdvb_hardware) linuxdvb_hardware_list_t;
 typedef TAILQ_HEAD(linuxdvb_satconf_ele_list,linuxdvb_satconf_ele) linuxdvb_satconf_ele_list_t;
 #if ENABLE_LINUXDVB_CA
@@ -156,6 +168,16 @@ struct linuxdvb_frontend
    * Satconf (DVB-S only)
    */
   linuxdvb_satconf_t       *lfe_satconf;
+
+  /*
+   * FBC (Full Band Capture, DVB-S only) - see linuxdvb_fbc.c
+   */
+  int                       lfe_fbc_set_id;  /* -1 = not an FBC slot */
+  int                       lfe_fbc_slot_id;
+  int                       lfe_fbc_is_root;
+  linuxdvb_frontend_t      *lfe_fbc_root;    /* leaf only: root committed to
+                                                 at last successful start_mux,
+                                                 NULL when idle. Not saved. */
 };
 
 #if ENABLE_LINUXDVB_CA
@@ -422,7 +444,8 @@ linuxdvb_frontend_t *
 linuxdvb_frontend_create
   ( htsmsg_t *conf, linuxdvb_adapter_t *la, int number,
     const char *fe_path, const char *dmx_path, const char *dvr_path,
-    dvb_fe_type_t type, const char *name );
+    dvb_fe_type_t type, const char *name,
+    const linuxdvb_fbc_slot_t *fbc );
 
 void linuxdvb_frontend_save ( linuxdvb_frontend_t *lfe, htsmsg_t *m );
 
@@ -439,6 +462,11 @@ int linuxdvb_frontend_tune1
   ( linuxdvb_frontend_t *lfe, mpegts_mux_instance_t *mmi, uint32_t freq );
 
 int linuxdvb2tvh_delsys ( int delsys );
+
+/*
+ * FBC (Full Band Capture)
+ */
+void linuxdvb_fbc_probe ( linuxdvb_fbc_slot_t table[32] );
 
 #if ENABLE_LINUXDVB_CA
 

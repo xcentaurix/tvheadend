@@ -2098,7 +2098,8 @@ linuxdvb_frontend_t *
 linuxdvb_frontend_create
   ( htsmsg_t *conf, linuxdvb_adapter_t *la, int number,
     const char *fe_path, const char *dmx_path, const char *dvr_path,
-    dvb_fe_type_t type, const char *name )
+    dvb_fe_type_t type, const char *name,
+    const linuxdvb_fbc_slot_t *fbc )
 {
   const idclass_t *idc;
   const char *str, *uuid = NULL, *muuid = NULL;
@@ -2177,6 +2178,19 @@ linuxdvb_frontend_create
   lfe->lfe_sig_multiplier = 100;
   lfe->lfe_snr_multiplier = 100;
   lfe->lfe_grace_period = 5;
+
+  /* FBC (Full Band Capture) topology - phase 1: record only, no
+   * behavior change yet (idclass selection/is_enabled/start_mux are
+   * untouched). See linuxdvb_fbc.c. */
+  lfe->lfe_fbc_set_id  = (type == DVB_TYPE_S && fbc) ? fbc->set_id  : -1;
+  lfe->lfe_fbc_slot_id = (type == DVB_TYPE_S && fbc) ? fbc->slot_id : 0;
+  lfe->lfe_fbc_is_root = (type == DVB_TYPE_S && fbc) ? fbc->is_root : 0;
+  lfe->lfe_fbc_root    = NULL;
+  if (lfe->lfe_fbc_set_id >= 0)
+    tvhinfo(LS_LINUXDVB, "fbc: frontend #%d (%s) -> set_id=%d slot_id=%d role=%s",
+            number, name, lfe->lfe_fbc_set_id, lfe->lfe_fbc_slot_id,
+            lfe->lfe_fbc_is_root ? "root" : "leaf");
+
   lfe = (linuxdvb_frontend_t*)mpegts_input_create0((mpegts_input_t*)lfe, idc, uuid, conf);
   if (!lfe) return NULL;
 

@@ -366,6 +366,7 @@ linuxdvb_adapter_add ( const char *path )
   htsmsg_t *conf = NULL, *feconf = NULL;
   int save = 0;
   dvb_fe_type_t type;
+  linuxdvb_fbc_slot_t fbc_table[32];
 #if DVB_VER_ATLEAST(5,5)
   int delsys, fenum, type5;
   dvb_fe_type_t fetypes[DVB_TYPE_LAST+1];
@@ -380,6 +381,10 @@ linuxdvb_adapter_add ( const char *path )
 
   if (a >= 0 && a < 32 && (linuxdvb_adapter_mask & (1 << a)) == 0)
     return;
+
+  /* FBC (Full Band Capture) topology, if any - read-only discovery,
+   * see linuxdvb_fbc.c */
+  linuxdvb_fbc_probe(fbc_table);
 
   /* Note: some of the below can take a while, so we relinquish the lock
    *       to stop us blocking everyhing else
@@ -471,15 +476,15 @@ linuxdvb_adapter_add ( const char *path )
 
       /* Create */
       linuxdvb_frontend_create(feconf, la, i, fe_path, dmx_path, dvr_path,
-                               type5, name);
+                               type5, name, &fbc_table[i]);
       fetypes[type5] = 1;
       fenum++;
     }
     if (fenum == 0)
       linuxdvb_frontend_create(feconf, la, i, fe_path, dmx_path, dvr_path,
-                               type, name);
+                               type, name, &fbc_table[i]);
 #else
-    linuxdvb_frontend_create(feconf, la, i, fe_path, dmx_path, dvr_path, type, name);
+    linuxdvb_frontend_create(feconf, la, i, fe_path, dmx_path, dvr_path, type, name, &fbc_table[i]);
 #endif
     tvh_mutex_unlock(&global_lock);
   }

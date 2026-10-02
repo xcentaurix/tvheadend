@@ -436,7 +436,8 @@ SRCS-LINUXDVB = \
 	src/input/mpegts/linuxdvb/linuxdvb_lnb.c \
 	src/input/mpegts/linuxdvb/linuxdvb_switch.c \
 	src/input/mpegts/linuxdvb/linuxdvb_rotor.c \
-	src/input/mpegts/linuxdvb/linuxdvb_en50494.c
+	src/input/mpegts/linuxdvb/linuxdvb_en50494.c \
+	src/input/mpegts/linuxdvb/linuxdvb_fbc.c
 SRCS-${CONFIG_LINUXDVB} += $(SRCS-LINUXDVB)
 I18N-C += $(SRCS-LINUXDVB)
 
