@@ -448,7 +448,8 @@ tcp_socket_dead(int fd)
   if (recv(fd, NULL, 0, MSG_PEEK | MSG_DONTWAIT) < 0)
     return -errno;
 #else
-  if (recv(fd, NULL, 0, MSG_PEEK | MSG_DONTWAIT) == 0)
+  char c;
+  if (recv(fd, &c, 1, MSG_PEEK | MSG_DONTWAIT) == 0)
     return -EIO;
 #endif
   return 0;
@@ -606,7 +607,14 @@ try_again:
   if (res == NULL)
     return NULL;
 
-  if (aa->aa_conn_limit || aa->aa_conn_limit_streaming) {
+  /*
+   * The limits count streaming connections (plus DVR), so only a launch
+   * that is going to stream is checked. A non-streaming connection (e.g. an
+   * HTSP control connection fetching EPG or metadata) is not refused; it
+   * is checked again when it subscribes (htsp_read_loop relaunches with
+   * streaming = 1).
+   */
+  if (streaming && (aa->aa_conn_limit || aa->aa_conn_limit_streaming)) {
     used2 = aa->aa_conn_limit ? dvr_usage_count(aa) : 0;
     /* the rule is: allow if one condition is OK */
     c1 = aa->aa_conn_limit ? sused + used2 >= aa->aa_conn_limit : -1;

@@ -24,6 +24,7 @@
 #include "descrambler/dvbcam.h"
 #include "dvb_psi_pmt.h"
 #include "dvb_psi_hbbtv.h"
+#include "tsdemux.h"
 
 /*
  * PMT processing
@@ -217,6 +218,33 @@ psi_desc_teletext(elementary_set_t *set, const uint8_t *ptr, int size,
 }
 
 /**
+ * Parser for supplementary audio descriptor (EN 300 468 6.4.11)
+ */
+static void
+psi_desc_supplementary_audio(const uint8_t *ptr, int size,
+                             int *audio_type, const char **lang)
+{
+  if (size < 2 || ptr[0] != 0x06)
+    return;
+
+  switch ((ptr[1] >> 2) & 0x1f) { /* editorial_classification */
+  case 0x01: /* audio description for the visually impaired */
+  case 0x03: /* spoken subtitles for the visually impaired */
+    *audio_type = 3;
+    break;
+  case 0x02: /* clean audio for the hearing impaired */
+    *audio_type = 2;
+    break;
+  default:
+    break;
+  }
+
+  /* language_code_present, overrides the ISO 639 descriptor */
+  if ((ptr[1] & 0x01) && size >= 5)
+    *lang = lang_code_get2((const char*)ptr + 2, 3);
+}
+
+/**
  *
  */
 static void
@@ -252,7 +280,9 @@ dvb_psi_parse_pmt
   int ac4;
   int pcr_shared = 0;
   const char *lang;
+  const char *supp_lang;
   uint8_t audio_type, audio_version;
+  int supp_audio_type;
   mpegts_mux_t *mux = mt->mt_mux;
   caid_t *c, *cn;
 
@@ -298,6 +328,7 @@ dvb_psi_parse_pmt
     len -= dlen; ptr += dlen; dllen -= dlen;
   }
 
+  position = 0;
   while(len >= 5) {
     estype  = ptr[0];
     pid     = extract_pid(ptr + 1);
@@ -313,10 +344,11 @@ dvb_psi_parse_pmt
     ancillary_id = -1;
     rds_uecp = 0;
     ac4 = 0;
-    position = 0;
     tt_position = 1000;
     lang = NULL;
+    supp_lang = NULL;
     audio_type = 0;
+    supp_audio_type = -1;
     audio_version = 0;
     video_stream = 0;
 
@@ -450,6 +482,8 @@ dvb_psi_parse_pmt
 
         if((estype == 0x06 || estype == 0x81) && ac4)
           hts_stream_type = SCT_AC4;
+
+        psi_desc_supplementary_audio(ptr, dlen, &supp_audio_type, &supp_lang);
         break;
 
       case DVB_DESC_ANCILLARY_DATA:
@@ -468,7 +502,12 @@ dvb_psi_parse_pmt
       }
       len -= dlen; ptr += dlen; dllen -= dlen;
     }
-    
+
+    if (supp_lang)
+      lang = supp_lang;
+    if (supp_audio_type >= 0)
+      audio_type = supp_audio_type;
+
     if (hts_stream_type != SCT_UNKNOWN) {
 
       st = elementary_stream_find(set, pid);
@@ -626,6 +665,9 @@ dvb_pmt_callback
   tvhdebug(mt->mt_subsys, "%s: sid %04X (%d)", mt->mt_name, sid, sid);
   update = 0;
   tvh_mutex_lock(&s->s_stream_mutex);
+  /* Keep buffered TS packets ahead of any stream reconfiguration. */
+  if (s->s_status == SERVICE_RUNNING)
+    ts_remux_flush(s);
   update = dvb_psi_parse_pmt(mt, service_nicename((service_t *)s),
                              &s->s_components, ptr, len);
   if (update) {
